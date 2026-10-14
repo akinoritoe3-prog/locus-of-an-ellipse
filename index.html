@@ -1,1 +1,882 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>線分の内分点がえがく軌跡 シミュレーター</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom scrollbar for mathematical explanation sidebar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 0;
+            padding-bottom: 85%; /* Aspect ratio */
+        }
+        @media (min-width: 1024px) {
+            .canvas-container {
+                padding-bottom: 100%;
+            }
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col">
 
+    <!-- Header -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-indigo-600/30 border border-indigo-500/50 rounded-lg text-indigo-400">
+                    <i class="fa-solid fa-chart-line text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-slate-100 tracking-wide">高校数学：線分の内分点がえがく軌跡</h1>
+                    <p class="text-xs text-slate-400">端点 $A, B$ が軸上を動くときの点 $P$ の軌跡（楕円）の対話型シミュレーター</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <i class="fa-solid fa-circle-check mr-1"></i>標準問題視覚化
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
+        
+        <!-- Left Column: Canvas & Direct Controls -->
+        <div class="lg:col-span-7 flex flex-col gap-4">
+            
+            <!-- Canvas Card -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-2xl relative overflow-hidden flex flex-col">
+                <!-- Status Badge Overlay -->
+                <div class="flex justify-between items-center mb-3 z-10">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse mr-1.5"></span>
+                            点 P(x, y) 軌跡追跡中
+                        </span>
+                    </div>
+                    <div class="text-xs text-slate-400 flex items-center gap-1 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
+                        <i class="fa-solid fa-hand-pointer text-indigo-400"></i>
+                        <span>ドラッグで角 $\theta$ を操作可能</span>
+                    </div>
+                </div>
+
+                <!-- Canvas Wrapper -->
+                <div class="canvas-container rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 shadow-inner">
+                    <canvas id="simCanvas"></canvas>
+                </div>
+
+                <!-- Quick Canvas Action Bar -->
+                <div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <button id="playBtn" class="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white py-2 px-3 rounded-xl font-medium transition text-sm shadow-lg shadow-indigo-600/20">
+                        <i class="fa-solid fa-play" id="playIcon"></i>
+                        <span id="playText">再生</span>
+                    </button>
+                    <button id="clearLocusBtn" class="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl font-medium transition text-sm border border-slate-700">
+                        <i class="fa-solid fa-eraser text-rose-400"></i>
+                        <span>軌跡クリア</span>
+                    </button>
+                    <button id="resetBtn" class="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl font-medium transition text-sm border border-slate-700">
+                        <i class="fa-solid fa-rotate-left text-sky-400"></i>
+                        <span>初期化</span>
+                    </button>
+                    <div class="flex items-center bg-slate-800/80 rounded-xl px-3 py-1 border border-slate-700">
+                        <span class="text-xs text-slate-400 mr-2 whitespace-nowrap">速度:</span>
+                        <input id="speedSlider" type="range" min="0.2" max="3" step="0.1" value="1" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interactive Controls Panel -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4">
+                <h2 class="text-sm font-semibold text-slate-300 border-b border-slate-800 pb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-indigo-400"></i> パラメータ設定
+                </h2>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Theta Angle Slider -->
+                    <div>
+                        <div class="flex justify-between text-xs font-medium text-slate-300 mb-1">
+                            <span>角度 $\theta$ (線分の傾き)</span>
+                            <span id="thetaVal" class="text-indigo-400 font-mono">0.0°</span>
+                        </div>
+                        <input id="thetaSlider" type="range" min="0" max="360" step="0.5" value="0" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                    </div>
+
+                    <!-- Line Length L Slider -->
+                    <div>
+                        <div class="flex justify-between text-xs font-medium text-slate-300 mb-1">
+                            <span>線分 AB の長さ ($L$)</span>
+                            <span id="lengthVal" class="text-sky-400 font-mono">5.0</span>
+                        </div>
+                        <input id="lengthSlider" type="range" min="1" max="10" step="0.5" value="5" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500">
+                    </div>
+
+                    <!-- Ratio m Slider -->
+                    <div>
+                        <div class="flex justify-between text-xs font-medium text-slate-300 mb-1">
+                            <span>内分比 $m$ (AP側)</span>
+                            <span id="mVal" class="text-amber-400 font-mono">2</span>
+                        </div>
+                        <input id="mSlider" type="range" min="1" max="8" step="1" value="2" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500">
+                    </div>
+
+                    <!-- Ratio n Slider -->
+                    <div>
+                        <div class="flex justify-between text-xs font-medium text-slate-300 mb-1">
+                            <span>内分比 $n$ (PB側)</span>
+                            <span id="nVal" class="text-emerald-400 font-mono">3</span>
+                        </div>
+                        <input id="nSlider" type="range" min="1" max="8" step="1" value="3" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                    </div>
+                </div>
+
+                <!-- Display Toggles -->
+                <div class="pt-2 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                        <input type="checkbox" id="toggleEllipse" checked class="rounded bg-slate-800 border-slate-700 text-indigo-500 focus:ring-0 cursor-pointer">
+                        <span>理論上の楕円を表示</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                        <input type="checkbox" id="togglePerp" checked class="rounded bg-slate-800 border-slate-700 text-indigo-500 focus:ring-0 cursor-pointer">
+                        <span>垂線・軸投影を表示</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+                        <input type="checkbox" id="toggleRatio" checked class="rounded bg-slate-800 border-slate-700 text-indigo-500 focus:ring-0 cursor-pointer">
+                        <span>比率・長さラベル表示</span>
+                    </label>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: Verification & Mathematical Derivation -->
+        <div class="lg:col-span-5 flex flex-col gap-4">
+            
+            <!-- Real-time Numerical Values Card -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                <h2 class="text-sm font-semibold text-slate-300 border-b border-slate-800 pb-2 mb-3 flex items-center justify-between">
+                    <span class="flex items-center gap-2">
+                        <i class="fa-solid fa-calculator text-amber-400"></i> リアルタイム座標と検証値
+                    </span>
+                    <span class="text-xs text-slate-500 font-mono">LIVE</span>
+                </h2>
+
+                <div class="grid grid-cols-3 gap-2 mb-3">
+                    <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-center">
+                        <span class="text-[10px] text-slate-400 block font-sans">端点 A ($x$軸上)</span>
+                        <span id="coordA" class="text-sm font-mono font-bold text-indigo-400">(3.00, 0.00)</span>
+                    </div>
+                    <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-center">
+                        <span class="text-[10px] text-slate-400 block font-sans">端点 B ($y$軸上)</span>
+                        <span id="coordB" class="text-sm font-mono font-bold text-rose-400">(0.00, 4.00)</span>
+                    </div>
+                    <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-center">
+                        <span class="text-[10px] text-slate-400 block font-sans">内分点 P ($m:n$)</span>
+                        <span id="coordP" class="text-sm font-mono font-bold text-amber-300">(1.80, 1.60)</span>
+                    </div>
+                </div>
+
+                <!-- Equation Checkers -->
+                <div class="space-y-2 text-xs">
+                    <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center">
+                        <span class="text-slate-400">三平方の定理 $a^2 + b^2 = L^2$:</span>
+                        <span id="checkPythagoras" class="font-mono text-emerald-400 font-semibold">9.00 + 16.00 = 25.00 ✓</span>
+                    </div>
+                    <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center">
+                        <span class="text-slate-400">楕円方程式 $\frac{x^2}{r_x^2} + \frac{y^2}{r_y^2}$:</span>
+                        <span id="checkEllipse" class="font-mono text-amber-300 font-semibold">0.36 + 0.64 = 1.000 ✓</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mathematical Derivation (KaTeX) Card -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex-1 flex flex-col min-h-[380px]">
+                <h2 class="text-sm font-semibold text-slate-300 border-b border-slate-800 pb-2 mb-3 flex items-center justify-between">
+                    <span class="flex items-center gap-2">
+                        <i class="fa-solid fa-graduation-cap text-emerald-400"></i> 数学的導出と解説
+                    </span>
+                    <span class="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30">ステップ解説</span>
+                </h2>
+
+                <div id="mathDerivation" class="text-xs space-y-3 text-slate-300 overflow-y-auto pr-1 flex-1">
+                    <!-- Math content rendered dynamically via JavaScript KaTeX -->
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800/80 bg-slate-950 px-4 py-3 text-center text-xs text-slate-500">
+        高校数学「図形と方程式」「2次曲線」統合グラフィカル学習教材
+    </footer>
+
+    <!-- Interactive JavaScript -->
+    <script>
+        // DOM Elements
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Controls
+        const playBtn = document.getElementById('playBtn');
+        const playIcon = document.getElementById('playIcon');
+        const playText = document.getElementById('playText');
+        const resetBtn = document.getElementById('resetBtn');
+        const clearLocusBtn = document.getElementById('clearLocusBtn');
+        const speedSlider = document.getElementById('speedSlider');
+
+        const thetaSlider = document.getElementById('thetaSlider');
+        const lengthSlider = document.getElementById('lengthSlider');
+        const mSlider = document.getElementById('mSlider');
+        const nSlider = document.getElementById('nSlider');
+
+        const thetaVal = document.getElementById('thetaVal');
+        const lengthVal = document.getElementById('lengthVal');
+        const mVal = document.getElementById('mVal');
+        const nVal = document.getElementById('nVal');
+
+        const toggleEllipse = document.getElementById('toggleEllipse');
+        const togglePerp = document.getElementById('togglePerp');
+        const toggleRatio = document.getElementById('toggleRatio');
+
+        const coordA = document.getElementById('coordA');
+        const coordB = document.getElementById('coordB');
+        const coordP = document.getElementById('coordP');
+        const checkPythagoras = document.getElementById('checkPythagoras');
+        const checkEllipse = document.getElementById('checkEllipse');
+        const mathDerivation = document.getElementById('mathDerivation');
+
+        // Simulation State
+        let isPlaying = false;
+        let animationFrameId = null;
+        let theta = 0; // angle in radians
+        let L = 5;     // Segment length
+        let m = 2;     // Ratio AP
+        let n = 3;     // Ratio PB
+        let speed = 1.0;
+
+        // Locus Points Array
+        let locusPoints = [];
+
+        // Interaction State
+        let isDragging = false;
+
+        // Resize Canvas with HDPI Support
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            draw();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        // Calculate Points A, B, P based on theta, L, m, n
+        function getCoordinates() {
+            // A is on x-axis, B is on y-axis
+            // A(a, 0), B(0, b) where a = L * cos(theta), b = L * sin(theta)
+            const a = L * Math.cos(theta);
+            const b = L * Math.sin(theta);
+
+            // Point P divides AB in m:n ratio
+            // x = (n*a + m*0)/(m+n) = (n*a)/(m+n)
+            // y = (n*0 + m*b)/(m+n) = (m*b)/(m+n)
+            const px = (n * a) / (m + n);
+            const py = (m * b) / (m + n);
+
+            // Theoretical ellipse radii
+            const rx = (n * L) / (m + n);
+            const ry = (m * L) / (m + n);
+
+            return { a, b, px, py, rx, ry };
+        }
+
+        // Add current P to locus history
+        function addLocusPoint(px, py) {
+            // Avoid duplicate points
+            if (locusPoints.length > 0) {
+                const last = locusPoints[locusPoints.length - 1];
+                const dist = Math.hypot(last.x - px, last.y - py);
+                if (dist < 0.02) return;
+            }
+            locusPoints.push({ x: px, y: py });
+            // Limit max locus points
+            if (locusPoints.length > 800) {
+                locusPoints.shift();
+            }
+        }
+
+        // Coordinate conversion (Math coordinates -> Canvas coordinates)
+        function mathToCanvas(mx, my) {
+            const rect = canvas.getBoundingClientRect();
+            const scale = Math.min(rect.width, rect.height) / 14; // Visible range approx [-7, 7]
+            const cx = rect.width / 2;
+            const cy = rect.height / 2;
+            return {
+                x: cx + mx * scale,
+                y: cy - my * scale, // Flip y-axis
+                scale
+            };
+        }
+
+        function canvasToMath(cx, cy) {
+            const rect = canvas.getBoundingClientRect();
+            const scale = Math.min(rect.width, rect.height) / 14;
+            const centerCanvasX = rect.width / 2;
+            const centerCanvasY = rect.height / 2;
+            return {
+                x: (cx - centerCanvasX) / scale,
+                y: (centerCanvasY - cy) / scale
+            };
+        }
+
+        // Main Rendering Loop
+        function draw() {
+            const rect = canvas.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+
+            // Clear Background
+            ctx.clearRect(0, 0, width, height);
+
+            const { a, b, px, py, rx, ry } = getCoordinates();
+            const origin = mathToCanvas(0, 0);
+
+            // 1. Draw Grid Lines & Axes
+            drawGridAndAxes(width, height, origin);
+
+            // 2. Theoretical Ellipse (if enabled)
+            if (toggleEllipse.checked) {
+                drawTheoreticalEllipse(origin, rx, ry);
+            }
+
+            // 3. Accumulated Locus Track
+            drawLocusTrack();
+
+            // 4. Perpendicular lines & projections (if enabled)
+            if (togglePerp.checked) {
+                drawPerpendiculars(origin, px, py);
+            }
+
+            // 5. Line Segment AB
+            const ptA = mathToCanvas(a, 0);
+            const ptB = mathToCanvas(0, b);
+            const ptP = mathToCanvas(px, py);
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(ptA.x, ptA.y);
+            ctx.lineTo(ptB.x, ptB.y);
+            ctx.strokeStyle = '#38bdf8'; // Sky blue
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.restore();
+
+            // 6. Ratio Division Markers & Text (if enabled)
+            if (toggleRatio.checked) {
+                drawRatioMarkers(ptA, ptB, ptP);
+            }
+
+            // 7. Draw Points A, B, P
+            // Point A (x-axis)
+            drawPoint(ptA, '#818cf8', 'A (a, 0)', 'bottom');
+            // Point B (y-axis)
+            drawPoint(ptB, '#fb7185', 'B (0, b)', 'left');
+            // Point P (Locus point)
+            drawPoint(ptP, '#f59e0b', `P (${px.toFixed(2)}, ${py.toFixed(2)})`, 'top', true);
+
+            // Update UI Panels
+            updateNumericalDisplay(a, b, px, py, rx, ry);
+        }
+
+        // Helper: Grid & Axes
+        function drawGridAndAxes(width, height, origin) {
+            ctx.save();
+            
+            // Grid Lines
+            ctx.strokeStyle = '#1e293b'; // Slate 800
+            ctx.lineWidth = 1;
+            const scale = origin.scale;
+
+            // Draw major grid lines
+            for (let x = origin.x % scale; x < width; x += scale) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+                ctx.stroke();
+            }
+            for (let y = origin.y % scale; y < height; y += scale) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
+
+            // Axes
+            ctx.strokeStyle = '#475569'; // Slate 600
+            ctx.lineWidth = 2;
+
+            // X-Axis
+            ctx.beginPath();
+            ctx.moveTo(0, origin.y);
+            ctx.lineTo(width, origin.y);
+            ctx.stroke();
+
+            // Y-Axis
+            ctx.beginPath();
+            ctx.moveTo(origin.x, 0);
+            ctx.lineTo(origin.x, height);
+            ctx.stroke();
+
+            // Axis Tick Labels & Origin
+            ctx.fillStyle = '#64748b';
+            ctx.font = '11px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+
+            // Origin O
+            ctx.fillText('O', origin.x - 12, origin.y + 6);
+
+            // X ticks
+            for (let i = -10; i <= 10; i++) {
+                if (i === 0) continue;
+                const pos = mathToCanvas(i, 0);
+                if (pos.x > 0 && pos.x < width) {
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x, origin.y - 3);
+                    ctx.lineTo(pos.x, origin.y + 3);
+                    ctx.stroke();
+                    ctx.fillText(i.toString(), pos.x, origin.y + 6);
+                }
+            }
+
+            // Y ticks
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            for (let j = -10; j <= 10; j++) {
+                if (j === 0) continue;
+                const pos = mathToCanvas(0, j);
+                if (pos.y > 0 && pos.y < height) {
+                    ctx.beginPath();
+                    ctx.moveTo(origin.x - 3, pos.y);
+                    ctx.lineTo(origin.x + 3, pos.y);
+                    ctx.stroke();
+                    ctx.fillText(j.toString(), origin.x - 6, pos.y);
+                }
+            }
+
+            ctx.restore();
+        }
+
+        // Helper: Theoretical Ellipse
+        function drawTheoreticalEllipse(origin, rx, ry) {
+            ctx.save();
+            ctx.beginPath();
+            const rxPx = rx * origin.scale;
+            const ryPx = ry * origin.scale;
+
+            ctx.ellipse(origin.x, origin.y, rxPx, ryPx, 0, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)'; // Emerald semi-transparent
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.stroke();
+
+            // Light fill
+            ctx.fillStyle = 'rgba(16, 185, 129, 0.04)';
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Helper: Locus Track
+        function drawLocusTrack() {
+            if (locusPoints.length < 2) return;
+
+            ctx.save();
+            ctx.beginPath();
+            const first = mathToCanvas(locusPoints[0].x, locusPoints[0].y);
+            ctx.moveTo(first.x, first.y);
+
+            for (let i = 1; i < locusPoints.length; i++) {
+                const pt = mathToCanvas(locusPoints[i].x, locusPoints[i].y);
+                ctx.lineTo(pt.x, pt.y);
+            }
+
+            ctx.strokeStyle = '#f59e0b'; // Amber glow line
+            ctx.lineWidth = 3.5;
+            ctx.shadowColor = '#f59e0b';
+            ctx.shadowBlur = 8;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Helper: Perpendiculars
+        function drawPerpendiculars(origin, px, py) {
+            const ptP = mathToCanvas(px, py);
+            const projX = mathToCanvas(px, 0);
+            const projY = mathToCanvas(0, py);
+
+            ctx.save();
+            ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]);
+
+            // Vertical to x-axis
+            ctx.beginPath();
+            ctx.moveTo(ptP.x, ptP.y);
+            ctx.lineTo(projX.x, projX.y);
+            ctx.stroke();
+
+            // Horizontal to y-axis
+            ctx.beginPath();
+            ctx.moveTo(ptP.x, ptP.y);
+            ctx.lineTo(projY.x, projY.y);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // Helper: Ratio Markers
+        function drawRatioMarkers(ptA, ptB, ptP) {
+            ctx.save();
+            ctx.fillStyle = '#cbd5e1';
+            ctx.font = 'bold 11px Inter, sans-serif';
+
+            // AP ratio label
+            const midAP = { x: (ptA.x + ptP.x) / 2, y: (ptA.y + ptP.y) / 2 };
+            ctx.fillText(`m = ${m}`, midAP.x + 8, midAP.y - 8);
+
+            // PB ratio label
+            const midPB = { x: (ptP.x + ptB.x) / 2, y: (ptP.y + ptB.y) / 2 };
+            ctx.fillText(`n = ${n}`, midPB.x + 8, midPB.y - 8);
+
+            ctx.restore();
+        }
+
+        // Helper: Point Drawing
+        function drawPoint(pt, color, label, labelPos = 'top', highlight = false) {
+            ctx.save();
+
+            if (highlight) {
+                // Glow effect for Point P
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, 10, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(245, 158, 11, 0.25)';
+                ctx.fill();
+            }
+
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, highlight ? 6 : 5, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Label
+            ctx.fillStyle = '#f1f5f9';
+            ctx.font = 'bold 12px Inter, sans-serif';
+
+            let offsetX = 0;
+            let offsetY = -10;
+            if (labelPos === 'bottom') offsetY = 18;
+            if (labelPos === 'left') { offsetX = -12; ctx.textAlign = 'right'; }
+            if (labelPos === 'right') { offsetX = 12; ctx.textAlign = 'left'; }
+
+            ctx.fillText(label, pt.x + offsetX, pt.y + offsetY);
+            ctx.restore();
+        }
+
+        // Update Numerical Displays and Equation Verification
+        function updateNumericalDisplay(a, b, px, py, rx, ry) {
+            coordA.textContent = `(${a >= 0 ? ' ' : ''}${a.toFixed(2)}, 0.00)`;
+            coordB.textContent = `(0.00, ${b >= 0 ? ' ' : ''}${b.toFixed(2)})`;
+            coordP.textContent = `(${px >= 0 ? ' ' : ''}${px.toFixed(2)}, ${py >= 0 ? ' ' : ''}${py.toFixed(2)})`;
+
+            // Pythagoras check: a^2 + b^2 = L^2
+            const a2 = a * a;
+            const b2 = b * b;
+            const L2 = L * L;
+            checkPythagoras.textContent = `${a2.toFixed(2)} + ${b2.toFixed(2)} = ${(a2 + b2).toFixed(2)} (L²=${L2.toFixed(2)})`;
+
+            // Ellipse Equation Check: x^2 / rx^2 + y^2 / ry^2 = 1
+            const termX = (px * px) / (rx * rx);
+            const termY = (py * py) / (ry * ry);
+            const sumTerms = termX + termY;
+            checkEllipse.textContent = `${termX.toFixed(2)} + ${termY.toFixed(2)} = ${sumTerms.toFixed(3)} ${Math.abs(sumTerms - 1.0) < 0.01 ? '✓' : ''}`;
+        }
+
+        // Render Dynamic Math Derivation using KaTeX
+        function updateMathDerivation() {
+            const sumRatio = m + n;
+            const rxVal = (n * L) / sumRatio;
+            const ryVal = (m * L) / sumRatio;
+            const rxSq = (rxVal * rxVal).toFixed(2);
+            const rySq = (ryVal * ryVal).toFixed(2);
+
+            const html = `
+                <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800/80">
+                    <p class="font-semibold text-indigo-400 mb-1">【ステップ1: 端点の設定と長さの条件】</p>
+                    <p>$x$軸上の点 $A(a, 0)$, $y$軸上の点 $B(0, b)$ とする。</p>
+                    <p>線分 $AB$ の長さは $L = ${L}$ より、$AB^2 = L^2$ だから</p>
+                    <div class="my-1 text-center font-mono text-slate-200">$$a^2 + b^2 = ${L*L} \quad \cdots \text{①}$$</div>
+                </div>
+
+                <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800/80">
+                    <p class="font-semibold text-amber-400 mb-1">【ステップ2: 内分点 $P(x,y)$ の定式化】</p>
+                    <p>点 $P(x, y)$ は線分 $AB$ を $m:n = ${m}:${n}$ に内分するので：</p>
+                    <div class="my-1 text-center font-mono text-slate-200">
+                        $$x = \\frac{${n} \\cdot a + ${m} \\cdot 0}{${m} + ${n}} = \\frac{${n}}{${sumRatio}} a, \\quad y = \\frac{${n} \\cdot 0 + ${m} \\cdot b}{${m} + ${n}} = \\frac{${m}}{${sumRatio}} b$$
+                    </div>
+                </div>
+
+                <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800/80">
+                    <p class="font-semibold text-sky-400 mb-1">【ステップ3: 変数 $a, b$ の消去】</p>
+                    <p>$a, b$ について解くと：</p>
+                    <div class="my-1 text-center font-mono text-slate-200">
+                        $$a = \\frac{${sumRatio}}{${n}} x, \\quad b = \\frac{${sumRatio}}{${m}} y$$
+                    </div>
+                </div>
+
+                <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800/80">
+                    <p class="font-semibold text-emerald-400 mb-1">【ステップ4: 条件式①への代入】</p>
+                    <p>$a, b$ を①式に代入：</p>
+                    <div class="my-1 text-center font-mono text-slate-200">
+                        $$\\left(\\frac{${sumRatio}}{${n}} x\\right)^2 + \\left(\\frac{${sumRatio}}{${m}} y\\right)^2 = ${L*L}$$
+                    </div>
+                    <p>両辺を $L^2 = ${L*L}$ で割って標準形に変形：</p>
+                    <div class="my-1 text-center font-mono text-emerald-300">
+                        $$\\frac{x^2}{\\left(\\frac{${n} \\times ${L}}{${sumRatio}}\\right)^2} + \\frac{y^2}{\\left(\\frac{${m} \\times ${L}}{${sumRatio}}\\right)^2} = 1$$
+                    </div>
+                </div>
+
+                <div class="p-2.5 bg-emerald-950/30 rounded-xl border border-emerald-500/30 text-emerald-200">
+                    <p class="font-bold mb-1">【結論】</p>
+                    <p>半軸長 $r_x = \\frac{${n} \\times ${L}}{${sumRatio}} = ${rxVal.toFixed(2)}$, $r_y = \\frac{${m} \\times ${L}}{${sumRatio}} = ${ryVal.toFixed(2)}$ より、</p>
+                    <p class="mt-1 text-center font-semibold text-sm">
+                        求める点 P の軌跡は **楕円 $\\frac{x^2}{${rxSq}} + \\frac{y^2}{${rySq}} = 1$** である。
+                    </p>
+                </div>
+            `;
+
+            mathDerivation.innerHTML = html;
+
+            // Trigger KaTeX rendering
+            renderMathInElement(mathDerivation, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "$", right: "$", display: false}
+                ],
+                throwOnError: false
+            });
+        }
+
+        // Animation Loop
+        function animate() {
+            if (!isPlaying) return;
+
+            // Advance angle theta
+            const step = 0.015 * speed;
+            theta += step;
+            if (theta > Math.PI * 2) {
+                theta -= Math.PI * 2;
+            }
+
+            // Sync Slider Value (deg)
+            const deg = (theta * 180 / Math.PI) % 360;
+            thetaSlider.value = deg;
+            thetaVal.textContent = `${deg.toFixed(1)}°`;
+
+            // Record locus point
+            const { px, py } = getCoordinates();
+            addLocusPoint(px, py);
+
+            draw();
+            animationFrameId = requestAnimationFrame(animate);
+        }
+
+        // Event Listeners
+        playBtn.addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                playIcon.className = 'fa-solid fa-pause';
+                playText.textContent = '一時停止';
+                animate();
+            } else {
+                playIcon.className = 'fa-solid fa-play';
+                playText.textContent = '再生';
+                if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            isPlaying = false;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            playIcon.className = 'fa-solid fa-play';
+            playText.textContent = '再生';
+
+            theta = 0;
+            L = 5;
+            m = 2;
+            n = 3;
+            speed = 1.0;
+
+            thetaSlider.value = 0;
+            lengthSlider.value = 5;
+            mSlider.value = 2;
+            nSlider.value = 3;
+            speedSlider.value = 1;
+
+            thetaVal.textContent = '0.0°';
+            lengthVal.textContent = '5.0';
+            mVal.textContent = '2';
+            nVal.textContent = '3';
+
+            locusPoints = [];
+            updateMathDerivation();
+            draw();
+        });
+
+        clearLocusBtn.addEventListener('click', () => {
+            locusPoints = [];
+            draw();
+        });
+
+        speedSlider.addEventListener('input', (e) => {
+            speed = parseFloat(e.target.value);
+        });
+
+        thetaSlider.addEventListener('input', (e) => {
+            const deg = parseFloat(e.target.value);
+            theta = (deg * Math.PI) / 180;
+            thetaVal.textContent = `${deg.toFixed(1)}°`;
+            
+            const { px, py } = getCoordinates();
+            addLocusPoint(px, py);
+            draw();
+        });
+
+        lengthSlider.addEventListener('input', (e) => {
+            L = parseFloat(e.target.value);
+            lengthVal.textContent = L.toFixed(1);
+            locusPoints = [];
+            updateMathDerivation();
+            draw();
+        });
+
+        mSlider.addEventListener('input', (e) => {
+            m = parseInt(e.target.value, 10);
+            mVal.textContent = m.toString();
+            locusPoints = [];
+            updateMathDerivation();
+            draw();
+        });
+
+        nSlider.addEventListener('input', (e) => {
+            n = parseInt(e.target.value, 10);
+            nVal.textContent = n.toString();
+            locusPoints = [];
+            updateMathDerivation();
+            draw();
+        });
+
+        [toggleEllipse, togglePerp, toggleRatio].forEach(toggle => {
+            toggle.addEventListener('change', draw);
+        });
+
+        // Mouse & Touch Dragging interaction on Canvas
+        function handlePointerMove(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = clientX - rect.left;
+            const mouseY = clientY - rect.top;
+
+            const mathPos = canvasToMath(mouseX, mouseY);
+            // Angle theta based on user cursor position around origin
+            let angle = Math.atan2(mathPos.y, mathPos.x);
+            if (angle < 0) angle += Math.PI * 2;
+
+            theta = angle;
+            const deg = (theta * 180 / Math.PI) % 360;
+            thetaSlider.value = deg;
+            thetaVal.textContent = `${deg.toFixed(1)}°`;
+
+            const { px, py } = getCoordinates();
+            addLocusPoint(px, py);
+            draw();
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            handlePointerMove(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                handlePointerMove(e.clientX, e.clientY);
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 0) {
+                isDragging = true;
+                handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            if (isDragging && e.touches.length > 0) {
+                handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchend', () => {
+            isDragging = false;
+        });
+
+        // Initial Initialization on window load
+        window.onload = function() {
+            resizeCanvas();
+            updateMathDerivation();
+            draw();
+        };
+    </script>
+</body>
+</html>
